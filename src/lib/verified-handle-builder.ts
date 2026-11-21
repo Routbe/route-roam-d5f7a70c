@@ -455,7 +455,7 @@ export function legalHandleTiers(input: LegalNameParts | string | null | undefin
   const used = new Set<string>();
   const keep = (list: string[]) =>
     list.filter((h) => {
-      if (used.has(h) || !isTraceableToLegalName(n, h) && !(alt && isTraceableToLegalName(alt, h))) return false;
+      if (used.has(h) || (!isTraceableToLegalName(n, h) && !(alt && isTraceableToLegalName(alt, h)))) return false;
       used.add(h);
       return true;
     });
