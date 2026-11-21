@@ -11,30 +11,30 @@
     {
       "capability": "schema",
       "source": "Neon Postgres, db/*.sql migrations (~272 tables)",
-      "outcome": "keep on Neon (user decision pending, Neon in use)",
-      "status": "pending_decision",
-      "next_action": "user answers Neon vs Lovable Cloud"
+      "outcome": "kept on the owner's Neon database (user decision 2026-11-21)",
+      "status": "connected",
+      "next_action": "end-to-end sign-in on the real domain (passkeys are bound to PUBLIC_ORIGIN)"
     },
     {
       "capability": "records",
       "source": "Neon",
-      "outcome": "stay in Neon if kept; otherwise CSV/JSON export needed",
-      "status": "pending_decision",
-      "next_action": "depends on database decision"
+      "outcome": "kept on the owner's Neon database (user decision 2026-11-21)",
+      "status": "connected",
+      "next_action": "end-to-end sign-in on the real domain (passkeys are bound to PUBLIC_ORIGIN)"
     },
     {
       "capability": "auth identities",
       "source": "Better Auth passkeys + OPAQUE in Neon",
-      "outcome": "keep with Neon",
-      "status": "pending_decision",
-      "next_action": "depends on database decision"
+      "outcome": "kept on the owner's Neon database (user decision 2026-11-21)",
+      "status": "connected",
+      "next_action": "end-to-end sign-in on the real domain (passkeys are bound to PUBLIC_ORIGIN)"
     },
     {
       "capability": "authorization",
       "source": "Postgres RLS + rout_app role",
-      "outcome": "unchanged in Neon",
-      "status": "pending_decision",
-      "next_action": "depends on database decision"
+      "outcome": "kept on the owner's Neon database (user decision 2026-11-21)",
+      "status": "connected",
+      "next_action": "end-to-end sign-in on the real domain (passkeys are bound to PUBLIC_ORIGIN)"
     },
     {
       "capability": "file storage",
@@ -90,7 +90,7 @@
       "source": "-",
       "outcome": "build OK; /, /login, /docs render on desktop and phone without errors",
       "status": "partial",
-      "next_action": "home page renders on desktop and phone; data pages need DATABASE_URL"
+      "next_action": "health probe operational at schema 0297; home and sign-in render; signed-in flows untested"
     }
   ]
 }
