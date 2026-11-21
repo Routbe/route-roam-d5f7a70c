@@ -510,10 +510,18 @@ export function validateChosenVerifiedHandle(
   rawHandle: string,
   opts: { isTaken: (handle: string) => boolean; isReserved: IsReserved },
 ): VerifiedHandleValidation {
+  return validateChosenFromTiers(legalHandleTiers(input), rawHandle, opts);
+}
+
+/** Zelfde hervalidatie, met tiers die al uit de (verzegelde) naam zijn berekend. */
+export function validateChosenFromTiers(
+  tiers: LegalHandleTiers | null,
+  rawHandle: string,
+  opts: { isTaken: (handle: string) => boolean; isReserved: IsReserved },
+): VerifiedHandleValidation {
   const handle = String(rawHandle ?? "").trim().replace(/^@/, "").toLowerCase();
   if (!isSafeVerifiedHandleShape(handle, true)) return { ok: false, code: "HANDLE_INVALID" };
   if (opts.isReserved(handle)) return { ok: false, code: "HANDLE_RESERVED" };
-  const tiers = legalHandleTiers(input);
   if (!tiers) return { ok: false, code: "HANDLE_NOT_LEGALLY_TRACEABLE" };
   const tierOf = (): HandleTier | null => {
     if (tiers.tier1.includes(handle)) return 1;

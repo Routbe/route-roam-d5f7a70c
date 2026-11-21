@@ -160,7 +160,6 @@ export async function listVerifiedHandleOptions(userId: string): Promise<Verifie
   const tiers = await tiersFromSealedName(userId);
   if (!tiers) return { ok: false, reason: "name_unavailable" };
   const taken = await takenRootHandles(allHandles(tiers));
-  const { verifiedHandleCandidates } = await import("./verified-handle-builder");
   const { isProtectedPublicSlug, isReservedSlug } = await import("./reserved-slugs");
   const rows = (await sql`
     select p.username, a.handle as alias_handle, a.blocks as alias_blocks
@@ -169,12 +168,7 @@ export async function listVerifiedHandleOptions(userId: string): Promise<Verifie
   `) as Row[];
   const row = rows[0] ?? {};
   const aliasHandle = ((row["alias_handle"] as string | null) ?? "").toLowerCase();
-  const options = verifiedHandleCandidates(
-    { first: "", last: "" },
-    {},
-  ).length === 0
-    ? candidatesFromTiers(tiers, (h) => taken.has(h) || h === aliasHandle, (h) => isReservedSlug(h) || isProtectedPublicSlug(h))
-    : [];
+  const options = candidatesFromTiers(tiers, (h) => taken.has(h) || h === aliasHandle, (h) => isReservedSlug(h) || isProtectedPublicSlug(h));
   const currentRaw = (row["username"] as string | null) ?? null;
   const current = currentRaw && (await memberMayHoldRootHandle(userId)) ? currentRaw : null;
   return {
@@ -223,9 +217,9 @@ export async function claimVerifiedRootHandle(
   const tiers = await tiersFromSealedName(userId);
   if (!tiers) return { ok: false, reason: "name_unavailable" };
   const taken = await takenRootHandles(allHandles(tiers));
-  const { validateChosenVerifiedHandle } = await import("./verified-handle-builder");
+  const { validateChosenFromTiers } = await import("./verified-handle-builder");
   const { isProtectedPublicSlug, isReservedSlug } = await import("./reserved-slugs");
-  const verdict = validateChosenVerifiedHandle(tiers, rawHandle, {
+  const verdict = validateChosenFromTiers(tiers, rawHandle, {
     isTaken: (h) => taken.has(h),
     isReserved: (h) => isReservedSlug(h) || isProtectedPublicSlug(h),
   });
