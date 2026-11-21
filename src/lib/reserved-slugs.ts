@@ -76,10 +76,80 @@ export const SYSTEM_SLUGS = [
   "verify",
 ] as const;
 
+/**
+ * Prioriteit 3 — systeemroutes en technische paden die nooit een handle mogen
+ * worden (ook niet na Didit). Gespiegeld in db/0298 (handle_registry, system_reserved).
+ */
+export const SYSTEM_ROUTE_SLUGS = [
+  "u",
+  "api",
+  "auth",
+  "login",
+  "register",
+  "admin",
+  "dashboard",
+  "settings",
+  "about",
+  "verify",
+  "badge",
+  "badges",
+  "workspace",
+  "workspaces",
+  "org",
+  "support",
+  "privacy",
+  "terms",
+  "legal",
+  "security",
+  "status",
+  "rout",
+  "delplanche",
+  "postmaster",
+  "abuse",
+  "well-known",
+  "robots.txt",
+  "sitemap.xml",
+] as const;
+
+/**
+ * Beschermde publieke, koninklijke en overheidsnamen. Nooit via Didit claimbaar;
+ * enkel een admin kent ze handmatig toe aan een officiële Organisatie-Workspace.
+ */
+export const PROTECTED_PUBLIC_SLUGS = [
+  "monarchie",
+  "koninklijkpaleis",
+  "palaisroyal",
+  "belgie",
+  "belgique",
+  "belgien",
+  "belgium",
+  "brussels",
+  "bruxelles",
+  "brussel",
+  "vlaanderen",
+  "wallonie",
+  "vrt",
+  "rtbf",
+  "federaal",
+  "overheid",
+  "gouvernement",
+  "politie",
+  "police",
+] as const;
+
 export const RESERVED_SLUGS: ReadonlySet<string> = new Set<string>([
   ...TOOL_SLUGS,
   ...SYSTEM_SLUGS,
+  ...SYSTEM_ROUTE_SLUGS,
+  ...PROTECTED_PUBLIC_SLUGS,
 ]);
+
+const PROTECTED_SET: ReadonlySet<string> = new Set<string>(PROTECTED_PUBLIC_SLUGS);
+
+/** Beschermde publieke term (koninklijk/overheid) — alleen admin-toekenning aan een workspace. */
+export function isProtectedPublicSlug(handle: string): boolean {
+  return PROTECTED_SET.has(handle.trim().replace(/^@/, "").toLowerCase());
+}
 
 export const RESERVED_SLUG_MESSAGE = "This handle is reserved by the platform.";
 

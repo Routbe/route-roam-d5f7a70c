@@ -468,7 +468,8 @@ export const RESERVED_HANDLES = [
   "dev",
 ];
 
-export const isReservedHandle = (h: string) => RESERVED_HANDLES.includes(h) || isReservedName(h).reserved;
+export const isReservedHandle = (h: string) =>
+  RESERVED_HANDLES.includes(h) || isReservedSlug(h) || isReservedName(h).reserved;
 
 /**
  * Public path for a profile: eigen namespace bij verificatie, anders `/u/`.
