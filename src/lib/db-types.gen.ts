@@ -6,6 +6,8 @@ export type JsonValue = string | number | boolean | null | JsonValue[] | { [key:
 export type PublicAppCredentialType = "badge" | "certificate" | "diploma";
 export type PublicAppRole = "admin" | "moderator" | "user";
 export type PublicClaimVerificationProvider = "none" | "itsme" | "eidas";
+export type PublicHandleNamespace = "root_verified" | "user_unverified" | "system_reserved";
+export type PublicHandleStatus = "RESERVED_HOLD" | "ACTIVE" | "TOMBSTONED" | "REVOKED";
 export type PublicIdentityProvider = "w_identity" | "didit" | "manual";
 export type PublicOmniContentType = "article" | "podcast" | "program" | "short" | "event" | "social";
 export type PublicOmniJobStatus = "queued" | "processing" | "ready" | "failed";
@@ -277,6 +279,7 @@ export interface PublicAliasProfilesRow {
   "created_at": string | Date;
   "updated_at": string | Date;
   "profile_descriptions": JsonValue;
+  "public_profile_id": string;
 }
 
 export interface PublicAliasSyncJobsRow {
@@ -975,6 +978,18 @@ export interface PublicGuestbookEntriesRow {
   "body": string;
   "pinned": boolean;
   "created_at": string | Date;
+}
+
+export interface PublicHandleRegistryRow {
+  "id": string;
+  "namespace": PublicHandleNamespace;
+  "handle_normalized": string;
+  "status": PublicHandleStatus;
+  "user_id": string | null;
+  "profile_id": string;
+  "claimed_at": string | Date;
+  "last_renamed_at": string | Date | null;
+  "tombstoned_until": string | Date | null;
 }
 
 export interface PublicHardwareChallengesRow {
@@ -1789,6 +1804,7 @@ export interface PublicProfilesRow {
   "email_bidx": Uint8Array | null;
   "forwarding_email_bidx": Uint8Array | null;
   "forwarding_email_token_bidx": Uint8Array | null;
+  "public_profile_id": string;
 }
 
 export interface PublicPromoCodeEventsRow {
@@ -2933,6 +2949,7 @@ export interface DbTables {
   "public.gallery_objects": PublicGalleryObjectsRow;
   "public.gift_cards": PublicGiftCardsRow;
   "public.guestbook_entries": PublicGuestbookEntriesRow;
+  "public.handle_registry": PublicHandleRegistryRow;
   "public.hardware_challenges": PublicHardwareChallengesRow;
   "public.identity_disclosure_logs": PublicIdentityDisclosureLogsRow;
   "public.identity_labels": PublicIdentityLabelsRow;
