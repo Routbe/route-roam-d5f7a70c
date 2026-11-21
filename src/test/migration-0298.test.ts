@@ -66,7 +66,7 @@ async function didit(uid: string, seed: string) {
     "select public.rout_kyc_attest($1, $2::text[], $3::text[], $4, $5, $6) as code",
     ["didit", [nf(`BEL:PN:${seed}`)], ["personal_number"], true, true, "BEL"],
   );
-  expect(rows[0]!.code).toBe("attested");
+  expect(rows[0]!.code).toBe("ok");
 }
 
 type Reg = { namespace: string; handle_normalized: string; status: string; tombstoned_until: string | null; last_renamed_at: string | null };
