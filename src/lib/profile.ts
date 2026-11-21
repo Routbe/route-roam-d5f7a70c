@@ -1,4 +1,5 @@
 import { isReservedName } from "./reserved-brands";
+import { isReservedSlug } from "./reserved-slugs";
 /**
  * ROUT Profile & Link Hub — data model for the public rout.be/@handle page.
  * Kept deliberately small: handle + identity + an ordered list of blocks.
