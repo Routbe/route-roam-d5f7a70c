@@ -110,3 +110,41 @@ export async function openPublicLegalName(profileId: string): Promise<string | n
     return null;
   }
 }
+
+/**
+ * The caller's own sealed legal name as separate first/last parts, opened in this process only and
+ * handed to `use` (owner directive Prioriteit 3: the verified root handle is chosen from variants of
+ * the Didit name and re-validated against it). `use` must return derived values (handle variants),
+ * never the name; the opened strings are dropped after it returns. Null before 0287, without a
+ * sealed pair, without ROUT_VAULT_KEK or on any failure.
+ */
+export async function withOwnLegalNameParts<T>(
+  userId: string,
+  use: (name: { first: string; last: string }) => T,
+): Promise<T | null> {
+  try {
+    const { hasSchemaFeature } = await import("@/lib/schema-features.server");
+    if (!(await hasSchemaFeature("0287"))) return null;
+    const { sql } = await import("@/lib/neon");
+    const [row] = (await sql`select legal_first_name_sealed as f, legal_last_name_sealed as l
+        from public.profiles where id = ${userId}::uuid limit 1`) as { f: unknown; l: unknown }[];
+    if (!(row?.f instanceof Uint8Array) || !(row?.l instanceof Uint8Array)) return null;
+    const { withProfileFieldKeys } = await import("@/lib/profile-private/field-keys.server");
+    const { openProfileRow } = await import("@/lib/profile-private/sealed-profile");
+    return await withProfileFieldKeys((ring) => {
+      if (!ring) return null;
+      let opened: Record<string, unknown> | null = openProfileRow(ring, { id: userId, legal_first_name_sealed: row.f, legal_last_name_sealed: row.l }, FIELDS);
+      try {
+        const first = String(opened["legal_first_name"] ?? "").trim();
+        const last = String(opened["legal_last_name"] ?? "").trim();
+        if (!first || !last) return null;
+        return use({ first, last });
+      } finally {
+        opened = null;
+      }
+    });
+  } catch (error) {
+    console.warn("[legal-name:own:skipped]", error instanceof Error ? error.name : "error");
+    return null;
+  }
+}

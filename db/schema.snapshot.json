@@ -41,6 +41,25 @@
     },
     {
       "schema": "public",
+      "name": "handle_namespace",
+      "labels": [
+        "root_verified",
+        "user_unverified",
+        "system_reserved"
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "handle_status",
+      "labels": [
+        "RESERVED_HOLD",
+        "ACTIVE",
+        "TOMBSTONED",
+        "REVOKED"
+      ]
+    },
+    {
+      "schema": "public",
       "name": "identity_provider",
       "labels": [
         "w_identity",
@@ -2711,6 +2730,14 @@
           "default": "'{}'::jsonb",
           "identity": null,
           "generated": null
+        },
+        {
+          "name": "public_profile_id",
+          "type": "uuid",
+          "notNull": true,
+          "default": "gen_random_uuid()",
+          "identity": null,
+          "generated": null
         }
       ],
       "constraints": [
@@ -2726,10 +2753,12 @@
         }
       ],
       "indexes": [
-        "CREATE UNIQUE INDEX alias_profiles_handle_ci_key ON public.alias_profiles USING btree (lower(handle))"
+        "CREATE UNIQUE INDEX alias_profiles_handle_ci_key ON public.alias_profiles USING btree (lower(handle))",
+        "CREATE UNIQUE INDEX alias_profiles_public_profile_id_key ON public.alias_profiles USING btree (public_profile_id)"
       ],
       "triggers": [
-        "CREATE TRIGGER alias_profiles_handle_namespace_guard BEFORE INSERT OR UPDATE OF handle ON public.alias_profiles FOR EACH ROW EXECUTE FUNCTION alias_profiles_handle_namespace_guard()"
+        "CREATE TRIGGER alias_profiles_handle_namespace_guard BEFORE INSERT OR UPDATE OF handle ON public.alias_profiles FOR EACH ROW EXECUTE FUNCTION alias_profiles_handle_namespace_guard()",
+        "CREATE TRIGGER alias_profiles_handle_registry_sync AFTER INSERT OR DELETE OR UPDATE OF handle, user_id ON public.alias_profiles FOR EACH ROW EXECUTE FUNCTION handle_registry_sync_aliases()"
       ],
       "rls": true,
       "forceRls": false,
@@ -10238,6 +10267,143 @@
           "INSERT",
           "SELECT",
           "UPDATE"
+        ]
+      }
+    },
+    {
+      "schema": "public",
+      "name": "handle_registry",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "notNull": true,
+          "default": "gen_random_uuid()",
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "namespace",
+          "type": "handle_namespace",
+          "notNull": true,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "handle_normalized",
+          "type": "text",
+          "notNull": true,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "status",
+          "type": "handle_status",
+          "notNull": true,
+          "default": "'ACTIVE'::handle_status",
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "notNull": false,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "profile_id",
+          "type": "uuid",
+          "notNull": true,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "claimed_at",
+          "type": "timestamp with time zone",
+          "notNull": true,
+          "default": "now()",
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "last_renamed_at",
+          "type": "timestamp with time zone",
+          "notNull": false,
+          "default": null,
+          "identity": null,
+          "generated": null
+        },
+        {
+          "name": "tombstoned_until",
+          "type": "timestamp with time zone",
+          "notNull": false,
+          "default": null,
+          "identity": null,
+          "generated": null
+        }
+      ],
+      "constraints": [
+        {
+          "name": "handle_registry_handle_lower",
+          "kind": "c",
+          "def": "CHECK ((handle_normalized = lower(handle_normalized)))"
+        },
+        {
+          "name": "handle_registry_handle_shape",
+          "kind": "c",
+          "def": "CHECK (((namespace = 'system_reserved'::handle_namespace) OR ((handle_normalized ~ '^[a-z0-9][a-z0-9._-]{1,62}[a-z0-9]$'::text) AND (handle_normalized !~ '(\\.\\.|\\.-|\\._|-\\.|_\\.)'::text))))"
+        },
+        {
+          "name": "handle_registry_owner",
+          "kind": "c",
+          "def": "CHECK (((namespace = 'system_reserved'::handle_namespace) = (user_id IS NULL)))"
+        },
+        {
+          "name": "handle_registry_pkey",
+          "kind": "p",
+          "def": "PRIMARY KEY (id)"
+        },
+        {
+          "name": "handle_registry_tombstone",
+          "kind": "c",
+          "def": "CHECK (((status = 'TOMBSTONED'::handle_status) = (tombstoned_until IS NOT NULL)))"
+        },
+        {
+          "name": "handle_registry_user_id_fkey",
+          "kind": "f",
+          "def": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX handle_registry_profile_id_idx ON public.handle_registry USING btree (profile_id)",
+        "CREATE INDEX handle_registry_user_id_idx ON public.handle_registry USING btree (user_id)",
+        "CREATE UNIQUE INDEX uq_handle_per_namespace ON public.handle_registry USING btree (namespace, handle_normalized) WHERE (status = ANY (ARRAY['ACTIVE'::handle_status, 'RESERVED_HOLD'::handle_status, 'TOMBSTONED'::handle_status]))",
+        "CREATE UNIQUE INDEX uq_user_single_root_verified ON public.handle_registry USING btree (user_id) WHERE ((namespace = 'root_verified'::handle_namespace) AND (status = 'ACTIVE'::handle_status))",
+        "CREATE UNIQUE INDEX uq_user_single_unverified_alias ON public.handle_registry USING btree (user_id) WHERE ((namespace = 'user_unverified'::handle_namespace) AND (status = 'ACTIVE'::handle_status))"
+      ],
+      "triggers": [],
+      "rls": true,
+      "forceRls": false,
+      "policies": [
+        {
+          "name": "rout_owner_read",
+          "permissive": true,
+          "roles": [
+            "rout_app"
+          ],
+          "cmd": "SELECT",
+          "using": "(user_id = rout_current_user_id())",
+          "check": null
+        }
+      ],
+      "grants": {
+        "rout_app": [
+          "SELECT"
         ]
       }
     },
@@ -18729,6 +18895,14 @@
           "default": null,
           "identity": null,
           "generated": null
+        },
+        {
+          "name": "public_profile_id",
+          "type": "uuid",
+          "notNull": true,
+          "default": "gen_random_uuid()",
+          "identity": null,
+          "generated": null
         }
       ],
       "constraints": [
@@ -18898,6 +19072,7 @@
         "CREATE INDEX profiles_shadowbanned_idx ON public.profiles USING btree (id) WHERE is_shadowbanned",
         "CREATE INDEX profiles_workspace_idx ON public.profiles USING btree (workspace_id) WHERE (workspace_id IS NOT NULL)",
         "CREATE UNIQUE INDEX profiles_forwarding_email_token_bidx_key ON public.profiles USING btree (forwarding_email_token_bidx) WHERE (forwarding_email_token_bidx IS NOT NULL)",
+        "CREATE UNIQUE INDEX profiles_public_profile_id_key ON public.profiles USING btree (public_profile_id)",
         "CREATE UNIQUE INDEX profiles_stripe_account_id_bidx_key ON public.profiles USING btree (stripe_account_id_bidx) WHERE (stripe_account_id_bidx IS NOT NULL)",
         "CREATE UNIQUE INDEX profiles_stripe_account_id_key ON public.profiles USING btree (stripe_account_id) WHERE (stripe_account_id IS NOT NULL)",
         "CREATE UNIQUE INDEX profiles_subdomain_alias_ci_key ON public.profiles USING btree (lower(subdomain_alias)) WHERE ((subdomain_alias IS NOT NULL) AND (subdomain_alias <> ''::text))",
@@ -18907,6 +19082,7 @@
       "triggers": [
         "CREATE TRIGGER profiles_early_verified_promo BEFORE UPDATE OF verified ON public.profiles FOR EACH ROW EXECUTE FUNCTION grant_early_verified_promo()",
         "CREATE TRIGGER profiles_handle_namespace_guard BEFORE INSERT OR UPDATE OF username, subdomain_alias ON public.profiles FOR EACH ROW EXECUTE FUNCTION profiles_handle_namespace_guard()",
+        "CREATE TRIGGER profiles_handle_registry_sync AFTER INSERT OR UPDATE OF username, verified, handle_grant, workspace_id ON public.profiles FOR EACH ROW EXECUTE FUNCTION handle_registry_sync_profiles()",
         "CREATE TRIGGER profiles_touch_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION touch_updated_at()"
       ],
       "rls": true,
@@ -34723,6 +34899,18 @@
     },
     {
       "schema": "public",
+      "name": "handle_registry_sync_aliases",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.handle_registry_sync_aliases()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'pg_temp'\nAS $function$\nbegin\n  if tg_op = 'DELETE' then\n    perform public.rout_handle_registry_move(old.user_id, 'user_unverified', old.public_profile_id, null, 'ACTIVE');\n    return null;\n  end if;\n  if tg_op = 'UPDATE' and old.user_id is distinct from new.user_id then\n    -- Account merge moves the alias row: its registry rows follow it.\n    update public.handle_registry\n       set user_id = new.user_id\n     where user_id = old.user_id and namespace = 'user_unverified' and profile_id = new.public_profile_id;\n  end if;\n  if tg_op = 'UPDATE' and pg_catalog.lower(old.handle) = pg_catalog.lower(new.handle)\n     and old.user_id is not distinct from new.user_id then\n    return null;\n  end if;\n  perform public.rout_handle_registry_move(new.user_id, 'user_unverified', new.public_profile_id, new.handle, 'ACTIVE');\n  return null;\nend\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "handle_registry_sync_profiles",
+      "args": "",
+      "def": "CREATE OR REPLACE FUNCTION public.handle_registry_sync_profiles()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'pg_temp'\nAS $function$\nbegin\n  if tg_op = 'UPDATE'\n     and pg_catalog.lower(coalesce(old.username, '')) = pg_catalog.lower(coalesce(new.username, ''))\n     and old.verified is not distinct from new.verified\n     and old.handle_grant is not distinct from new.handle_grant\n     and old.workspace_id is not distinct from new.workspace_id then\n    return null;\n  end if;\n  if tg_op = 'INSERT' and new.username is null then\n    return null;\n  end if;\n  perform public.rout_handle_registry_move(\n    new.id, 'root_verified', new.public_profile_id, new.username,\n    case when public.rout_root_handle_eligible(new.id) then 'ACTIVE'::public.handle_status\n         else 'RESERVED_HOLD'::public.handle_status end\n  );\n  return null;\nend\n$function$"
+    },
+    {
+      "schema": "public",
       "name": "has_role",
       "args": "_user_id uuid, _role app_role",
       "def": "CREATE OR REPLACE FUNCTION public.has_role(_user_id uuid, _role app_role)\n RETURNS boolean\n LANGUAGE sql\n STABLE\n SET search_path TO 'public'\nAS $function$\n  select _user_id = auth.uid()\n    and exists (\n      select 1\n      from public.user_roles\n      where user_id = _user_id\n        and role = _role\n    )\n$function$"
@@ -35521,6 +35709,12 @@
     },
     {
       "schema": "public",
+      "name": "rout_claim_verified_root_handle",
+      "args": "p_handle text, p_copy_links boolean, p_hide_alias boolean",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_claim_verified_root_handle(p_handle text, p_copy_links boolean, p_hide_alias boolean)\n RETURNS text\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'pg_temp'\nAS $function$\ndeclare\n  v_uid uuid := public.rout_current_user_id();\n  v_h text := pg_catalog.lower(pg_catalog.btrim(coalesce(p_handle, '')));\n  v_root public.handle_registry%rowtype;\n  v_fresh boolean;\n  v_alias_blocks jsonb;\nbegin\n  if v_uid is null then\n    raise exception 'not_authenticated' using errcode = '42501';\n  end if;\n  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('rout.root_claim.user:' || v_uid::text, 0));\n  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('rout.handle:' || v_h, 0));\n\n  if not public.rout_didit_attested(v_uid) then\n    raise exception 'root_handle_identity_required' using errcode = '42501';\n  end if;\n  if not public.rout_handle_shape_ok(v_h) then\n    raise exception 'handle_invalid' using errcode = '22023';\n  end if;\n  if exists (select 1 from public.handle_registry r where r.namespace = 'system_reserved' and r.handle_normalized = v_h) then\n    raise exception 'handle_reserved' using errcode = '22023';\n  end if;\n  if exists (select 1 from public.alias_profiles a where a.user_id = v_uid and pg_catalog.lower(a.handle) = v_h) then\n    raise exception 'handle_matches_own_alias' using errcode = '22023';\n  end if;\n  if not public.rout_handle_available('root_verified', v_h) then\n    raise exception 'handle_taken' using errcode = 'unique_violation';\n  end if;\n\n  select * into v_root from public.handle_registry r\n   where r.user_id = v_uid and r.namespace = 'root_verified' and r.status = 'ACTIVE' limit 1;\n  v_fresh := not found;\n  if not v_fresh then\n    if v_root.handle_normalized = v_h then\n      return v_h;\n    end if;\n    if v_root.last_renamed_at is not null and v_root.last_renamed_at > now() - interval '30 days' then\n      raise exception 'root_handle_cooldown' using errcode = '22023';\n    end if;\n  end if;\n\n  if v_fresh then\n    -- Start of a new verified profile: blank (default) or a one-time copy of the alias links.\n    v_alias_blocks := (select a.blocks from public.alias_profiles a where a.user_id = v_uid);\n    update public.profiles\n       set display_name = null, tagline = null, bio = null, avatar_url = null, favicon_url = null,\n           profile_descriptions = '{}'::jsonb,\n           blocks = case when coalesce(p_copy_links, false) then coalesce(v_alias_blocks, '[]'::jsonb) else '[]'::jsonb end\n     where id = v_uid;\n    delete from public.profile_drafts where user_id = v_uid and space = 'verified';\n  end if;\n\n  if coalesce(p_hide_alias, false) then\n    update public.alias_profiles\n       set display_prefs = coalesce(display_prefs, '{}'::jsonb) || pg_catalog.jsonb_build_object('publicProfile', false),\n           updated_at = now()\n     where user_id = v_uid;\n  end if;\n\n  update public.profiles\n     set username = v_h, verified = true, verified_at = coalesce(verified_at, now()), updated_at = now()\n   where id = v_uid;\n  if not found then\n    raise exception 'profile_not_found' using errcode = 'P0002';\n  end if;\n  return v_h;\nend\n$function$"
+    },
+    {
+      "schema": "public",
       "name": "rout_contact_submission_create",
       "args": "p_name text, p_email text, p_subject text, p_message text, p_locale text, p_sender_hash text, p_portal_category text, p_category text, p_priority text, p_meta jsonb, p_attachment_key text, p_attachment_name text, p_attachment_size bigint, p_attachment_mime text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_contact_submission_create(p_name text, p_email text, p_subject text, p_message text, p_locale text, p_sender_hash text, p_portal_category text, p_category text, p_priority text, p_meta jsonb, p_attachment_key text, p_attachment_name text, p_attachment_size bigint, p_attachment_mime text)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'pg_temp'\nAS $function$\ndeclare v_id uuid;\nbegin\n  if p_name is null or pg_catalog.length(p_name) not between 1 and 100\n     or p_email is null or pg_catalog.length(p_email) not between 3 and 255 or pg_catalog.strpos(p_email, '@') = 0\n     or p_subject is null or pg_catalog.length(p_subject) not between 1 and 150\n     or p_message is null or pg_catalog.length(p_message) not between 1 and 2000\n     or p_locale not in ('nl', 'en', 'fr', 'de')\n     or coalesce(pg_catalog.length(p_sender_hash), 0) > 128\n     or coalesce(pg_catalog.length(p_portal_category), 0) > 40\n     or coalesce(pg_catalog.length(p_category), 0) > 40\n     or coalesce(pg_catalog.length(p_priority), 0) > 40\n     or pg_catalog.octet_length(coalesce(p_meta, '{}'::jsonb)::text) > 4096\n     or coalesce(pg_catalog.length(p_attachment_key), 0) > 300\n     or coalesce(pg_catalog.length(p_attachment_name), 0) > 120\n     or (p_attachment_size is not null and p_attachment_size not between 1 and 5242880)\n     or (p_attachment_mime is not null and p_attachment_mime not in ('image/png', 'image/jpeg', 'text/plain', 'application/json')) then\n    raise exception 'invalid contact submission' using errcode = '22023';\n  end if;\n  insert into public.contact_submissions (name, email, subject, message, locale, status, sender_hash, portal_category,\n    category, priority, meta, attachment_key, attachment_name, attachment_size, attachment_mime)\n  values (p_name, p_email, p_subject, p_message, p_locale, 'pending', p_sender_hash, p_portal_category,\n    p_category, p_priority, p_meta, p_attachment_key, p_attachment_name, p_attachment_size, p_attachment_mime)\n  returning id into v_id;\n  return v_id;\nend $function$"
@@ -35542,6 +35736,12 @@
       "name": "rout_current_username",
       "args": "",
       "def": "CREATE OR REPLACE FUNCTION public.rout_current_username()\n RETURNS text\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'pg_temp'\nAS $function$\n  select pg_catalog.lower(p.username) from public.profiles p where p.id = public.rout_current_user_id()\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_didit_attested",
+      "args": "p_user uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_didit_attested(p_user uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'pg_temp'\nAS $function$\n  select exists (\n      select 1 from public.verified_identity_nullifiers v\n       where v.user_id = p_user and v.provider = 'didit' and v.evidence = 'kyc_document' and v.has_legal_identity\n    ) or exists (\n      select 1 from public.identity_verifications iv\n       where iv.user_id = p_user and iv.is_verified and iv.verification_provider::text = 'didit'\n    )\n$function$"
     },
     {
       "schema": "public",
@@ -35674,6 +35874,30 @@
       "name": "rout_grid_media_path",
       "args": "p_url text",
       "def": "CREATE OR REPLACE FUNCTION public.rout_grid_media_path(p_url text)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n select case when p_url ~ '^/api/public/gallery-media\\?path=[0-9a-f-]{36}(%2[Ff]|/)[A-Za-z0-9][A-Za-z0-9._-]{0,159}$'\n then replace(replace(split_part(p_url,'path=',2),'%2F','/'),'%2f','/') else null end\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_handle_available",
+      "args": "p_namespace handle_namespace, p_handle text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_handle_available(p_namespace handle_namespace, p_handle text)\n RETURNS boolean\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'pg_temp'\nAS $function$\ndeclare\n  v_uid uuid := public.rout_current_user_id();\n  v_h text := pg_catalog.lower(pg_catalog.btrim(coalesce(p_handle, '')));\nbegin\n  if v_h = '' or p_namespace = 'system_reserved' then\n    return false;\n  end if;\n  if p_namespace = 'root_verified' and exists (\n    select 1 from public.handle_registry r where r.namespace = 'system_reserved' and r.handle_normalized = v_h\n  ) then\n    return false;\n  end if;\n  if exists (\n    select 1 from public.handle_registry r\n     where r.namespace = p_namespace and r.handle_normalized = v_h\n       and r.user_id is distinct from v_uid\n       and (r.status in ('ACTIVE', 'RESERVED_HOLD') or (r.status = 'TOMBSTONED' and r.tombstoned_until > now()))\n  ) then\n    return false;\n  end if;\n  if exists (\n    select 1 from public.profiles p\n     where (pg_catalog.lower(p.username) = v_h or pg_catalog.lower(coalesce(p.subdomain_alias, '')) = v_h)\n       and p.id is distinct from v_uid\n  ) or exists (\n    select 1 from public.alias_profiles a where pg_catalog.lower(a.handle) = v_h and a.user_id is distinct from v_uid\n  ) or exists (\n    select 1 from public.domain_claims d\n     where d.handle = v_h and d.status in ('verified', 'grace') and d.user_id is distinct from v_uid\n  ) or exists (\n    select 1 from public.workspace_root_aliases w where w.handle = v_h\n  ) then\n    return false;\n  end if;\n  return true;\nend\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_handle_registry_move",
+      "args": "p_user uuid, p_namespace handle_namespace, p_profile uuid, p_new text, p_status handle_status",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_handle_registry_move(p_user uuid, p_namespace handle_namespace, p_profile uuid, p_new text, p_status handle_status)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'pg_temp'\nAS $function$\ndeclare\n  v_new text := nullif(pg_catalog.lower(pg_catalog.btrim(coalesce(p_new, ''))), '');\n  v_current public.handle_registry%rowtype;\n  v_had_previous boolean := false;\nbegin\n  select * into v_current from public.handle_registry r\n   where r.user_id = p_user and r.namespace = p_namespace and r.status in ('ACTIVE', 'RESERVED_HOLD')\n   order by r.claimed_at desc limit 1;\n\n  if found and v_current.handle_normalized = v_new then\n    if v_current.status <> p_status or v_current.profile_id <> p_profile then\n      update public.handle_registry set status = p_status, profile_id = p_profile where id = v_current.id;\n    end if;\n    return;\n  end if;\n\n  if found then\n    v_had_previous := true;\n    update public.handle_registry\n       set status = 'TOMBSTONED', tombstoned_until = now() + interval '14 days'\n     where id = v_current.id;\n  end if;\n\n  if v_new is null or not public.rout_handle_shape_ok(v_new) then\n    return;\n  end if;\n\n  update public.handle_registry\n     set status = 'REVOKED', tombstoned_until = null\n   where namespace = p_namespace and handle_normalized = v_new\n     and status = 'TOMBSTONED' and tombstoned_until <= now();\n\n  update public.handle_registry\n     set status = p_status, tombstoned_until = null, profile_id = p_profile,\n         last_renamed_at = case when v_had_previous then now() else last_renamed_at end\n   where namespace = p_namespace and handle_normalized = v_new\n     and status = 'TOMBSTONED' and user_id = p_user;\n  if found then\n    return;\n  end if;\n\n  if exists (\n    select 1 from public.handle_registry r\n     where r.namespace = p_namespace and r.handle_normalized = v_new\n       and r.status = 'TOMBSTONED' and r.user_id is distinct from p_user\n  ) then\n    raise exception 'handle_cooling_down: % is recently released', v_new using errcode = 'unique_violation';\n  end if;\n\n  insert into public.handle_registry (namespace, handle_normalized, status, user_id, profile_id, claimed_at, last_renamed_at)\n  values (p_namespace, v_new, p_status, p_user, p_profile, now(), case when v_had_previous then now() else null end);\nend\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_handle_shape_ok",
+      "args": "p_handle text",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_handle_shape_ok(p_handle text)\n RETURNS boolean\n LANGUAGE sql\n IMMUTABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'pg_temp'\nAS $function$\n  select p_handle operator(pg_catalog.~) '^[a-z0-9][a-z0-9._-]{1,62}[a-z0-9]$'\n     and p_handle operator(pg_catalog.!~) '(\\.\\.|\\.-|\\._|-\\.|_\\.)'\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_handles_taken",
+      "args": "p_namespace handle_namespace, p_handles text[]",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_handles_taken(p_namespace handle_namespace, p_handles text[])\n RETURNS SETOF text\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'pg_temp'\nAS $function$\n  select h from pg_catalog.unnest(coalesce(p_handles, '{}'::text[])) as h\n   where pg_catalog.array_length(p_handles, 1) <= 200\n     and not public.rout_handle_available(p_namespace, h)\n$function$"
     },
     {
       "schema": "public",
@@ -36736,6 +36960,12 @@
       "name": "rout_reviewer_admin_id",
       "args": "",
       "def": "CREATE OR REPLACE FUNCTION public.rout_reviewer_admin_id()\n RETURNS uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'pg_temp'\nAS $function$\n  select r.user_id from public.user_roles r where r.role::text = 'admin' order by r.user_id limit 1\n$function$"
+    },
+    {
+      "schema": "public",
+      "name": "rout_root_handle_eligible",
+      "args": "p_user uuid",
+      "def": "CREATE OR REPLACE FUNCTION public.rout_root_handle_eligible(p_user uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'pg_temp'\nAS $function$\n  select coalesce((\n      select p.verified or p.handle_grant is not null or p.workspace_id is not null\n        from public.profiles p where p.id = p_user\n    ), false) or public.rout_didit_attested(p_user)\n$function$"
     },
     {
       "schema": "public",

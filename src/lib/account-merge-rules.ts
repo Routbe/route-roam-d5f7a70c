@@ -52,6 +52,9 @@ export const MERGE_TABLES: Readonly<Record<string, MergeTableRule>> = {
   oid4vci_offers: r("drop"),
   oid4vp_requests: r("drop"),
   wallet_credentials: r("drop"),
+  // Handle registry (0298): derived from profiles.username and alias_profiles by triggers. A moved
+  // alias row carries its registry row along; the secondary's other rows go with the account.
+  handle_registry: r("drop"),
   // Omni ingestion and live-presence rows (0185-0190) were added after the merge
   // manifest was reviewed: until a move strategy is reviewed, a secondary
   // account that owns any of them blocks the merge instead of losing data.
