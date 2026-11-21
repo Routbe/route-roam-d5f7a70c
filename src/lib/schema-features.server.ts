@@ -26,6 +26,10 @@ const MARKERS = {
   /** db/0295_dpop_jti_replays.sql (DPoP jti replay ledger shared by every server instance) */
   "0295": "public.rout_dpop_jti_claim(text,integer)",
   "0296": "public.rout_identity_records_purge(uuid)",
+  /** db/0298_handle_registry_dual_profile.sql (handle registry, dual-profile claim) */
+  "0298": "public.rout_claim_verified_root_handle(text,boolean,boolean)",
+  /** db-pending/0299_handle_namespace_contract.sql (root policy + alias cooldown guards) */
+  "0299": "public.rout_enforce_alias_rename_cooldown()",
 } as const;
 export type SchemaFeature = keyof typeof MARKERS;
 
