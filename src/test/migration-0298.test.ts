@@ -17,9 +17,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { ROOT, applyPending, replayDb } from "../../scripts/formal-rls/replay";
+import { applyPending, applyReleased, replayDb } from "../../scripts/formal-rls/replay";
 import { PROTECTED_PUBLIC_SLUGS, SYSTEM_ROUTE_SLUGS, RESERVED_SLUGS } from "@/lib/reserved-slugs";
 import { universalNullifier } from "@/lib/kyc/nullifier";
 
@@ -345,12 +343,12 @@ describe("db-pending/0299 contract (Option A + guards)", () => {
 describe("rollbacks", () => {
   it("0298 rollback refuses while 0299 is installed, then both roll back cleanly", async () => {
     await expect(applyPending(db, "0298_handle_registry_dual_profile_rollback.sql")).rejects.toThrow(/roll back 0299 first/);
+    await db.exec("rollback;");
     await applyPending(db, "0299_handle_namespace_contract_rollback.sql");
     await applyPending(db, "0298_handle_registry_dual_profile_rollback.sql");
     const left = (await db.query<{ t: string | null }>("select to_regclass('public.handle_registry')::text as t")).rows[0]!;
     expect(left.t).toBeNull();
-    const sql = readFileSync(join(ROOT, "db", "0298_handle_registry_dual_profile.sql"), "utf8");
-    await db.exec(`begin;\n${sql}\ncommit;`);
+    await applyReleased(db, "0298_handle_registry_dual_profile.sql");
     expect((await db.query<{ n: number }>("select count(*)::int as n from public.handle_registry where namespace = 'system_reserved'")).rows[0]!.n).toBe(
       SYSTEM_ROUTE_SLUGS.length + PROTECTED_PUBLIC_SLUGS.length,
     );
