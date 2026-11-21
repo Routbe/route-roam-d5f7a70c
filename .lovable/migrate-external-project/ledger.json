@@ -1,10 +1,10 @@
 {
-  "source": "github:Routbe/route-roam-31160c5a@main",
+  "source": "github:Routbe/route-roam-9cff3bfc@main",
   "capabilities": [
     {
       "capability": "code",
       "source": "TanStack Start app (396 route files, MDX docs, wasm, worker, scripts)",
-      "outcome": "copied as-is; TanStack versions unchanged",
+      "outcome": "copied as-is into this project; TanStack versions identical",
       "status": "done",
       "next_action": "none"
     },
@@ -90,7 +90,7 @@
       "source": "-",
       "outcome": "build OK; /, /login, /docs render on desktop and phone without errors",
       "status": "partial",
-      "next_action": "sign-in and data checks after Neon + secrets are connected"
+      "next_action": "home page renders on desktop and phone; data pages need DATABASE_URL"
     }
   ]
 }
